@@ -108,6 +108,23 @@
   .message .md-content th, .message .md-content td { border: 1px solid #333; padding: 6px 10px; font-size: 13px; }
   .message .md-content th { background: #1a1a2e; }
   .message .md-content a { color: #5e9eff; }
+  .thinking-toggle {
+    display: flex; align-items: center; gap: 6px; cursor: pointer;
+    padding: 6px 10px; margin-bottom: 8px; background: #1a1a2e;
+    border-radius: 8px; border: 1px solid #2a2a4a; font-size: 12px;
+    color: #a0a0b8; user-select: none; transition: background 0.2s;
+  }
+  .thinking-toggle:hover { background: #222244; }
+  .thinking-toggle .arrow { transition: transform 0.2s; display: inline-block; }
+  .thinking-toggle .arrow.open { transform: rotate(90deg); }
+  .thinking-toggle .label { font-weight: 600; }
+  .thinking-toggle .duration { color: #666; margin-left: auto; }
+  .thinking-content {
+    display: none; padding: 10px 12px; margin-bottom: 10px;
+    background: #1a1a2e; border-radius: 8px; border-left: 3px solid #f0a500;
+    font-size: 13px; color: #888; line-height: 1.5; max-height: 400px; overflow-y: auto;
+  }
+  .thinking-content.open { display: block; }
   .message .role { font-size: 11px; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; color: #a0a0b8; }
   .message.user .role { color: #5e9eff; }
   .message.assistant .role { color: #e94560; }
@@ -311,21 +328,54 @@ function renderMarkdown(text) {
   return marked.parse(text);
 }
 
-function addBubble(role, content, tokens) {
+function parseThinking(content) {
+  const match = content.match(/<think>([\s\S]*?)<\/think>/);
+  if (!match) return { thinking: null, response: content.trim() };
+  const thinking = match[1].trim();
+  const response = content.replace(/<think>[\s\S]*?<\/think>/, '').trim();
+  return { thinking, response };
+}
+
+function addBubble(role, content, tokens, thinkingTime) {
   const div = document.createElement('div');
   div.className = `message ${role}`;
   const roleLabel = document.createElement('div');
   roleLabel.className = 'role';
   roleLabel.textContent = role === 'user' ? 'You' : 'Assistant';
   div.appendChild(roleLabel);
-  const text = document.createElement('div');
+
   if (role === 'assistant') {
+    const { thinking, response } = parseThinking(content);
+
+    if (thinking) {
+      const toggle = document.createElement('div');
+      toggle.className = 'thinking-toggle';
+      const timeStr = thinkingTime ? ` (${thinkingTime}s)` : '';
+      toggle.innerHTML = `<span class="arrow">&#9654;</span><span class="label">Thinking</span><span class="duration">${timeStr}</span>`;
+      div.appendChild(toggle);
+
+      const thinkDiv = document.createElement('div');
+      thinkDiv.className = 'thinking-content';
+      thinkDiv.innerHTML = renderMarkdown(thinking);
+      div.appendChild(thinkDiv);
+
+      toggle.onclick = () => {
+        const arrow = toggle.querySelector('.arrow');
+        arrow.classList.toggle('open');
+        thinkDiv.classList.toggle('open');
+      };
+    }
+
+    const text = document.createElement('div');
     text.className = 'md-content';
-    text.innerHTML = renderMarkdown(content);
+    text.innerHTML = renderMarkdown(response);
+    div.appendChild(text);
   } else {
+    const text = document.createElement('div');
     text.textContent = content;
+    div.appendChild(text);
   }
-  div.appendChild(text);
+
   if (tokens) {
     const t = document.createElement('div');
     t.className = 'tokens';
@@ -363,6 +413,7 @@ async function send() {
   addBubble('user', content);
   showTyping();
 
+  const sendTime = Date.now();
   try {
     const resp = await fetch(urlEl.value, {
       method: 'POST',
@@ -383,10 +434,11 @@ async function send() {
     const data = await resp.json();
     const msg = data.choices[0].message;
     const usage = data.usage || null;
+    const elapsed = ((Date.now() - sendTime) / 1000).toFixed(1);
 
     messages.push({ role: 'assistant', content: msg.content });
     hideTyping();
-    addBubble('assistant', msg.content, usage);
+    addBubble('assistant', msg.content, usage, elapsed);
   } catch (e) {
     hideTyping();
     const div = document.createElement('div');
