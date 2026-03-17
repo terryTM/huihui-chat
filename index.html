@@ -436,7 +436,9 @@ async function send() {
     const usage = data.usage || null;
     const elapsed = ((Date.now() - sendTime) / 1000).toFixed(1);
 
-    messages.push({ role: 'assistant', content: msg.content });
+    // Store only the response (without <think> tags) in conversation history
+    const { response: cleanContent } = parseThinking(msg.content);
+    messages.push({ role: 'assistant', content: cleanContent });
     hideTyping();
     addBubble('assistant', msg.content, usage, elapsed);
   } catch (e) {
