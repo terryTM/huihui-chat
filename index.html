@@ -336,10 +336,15 @@ function parseThinking(content) {
     const response = content.replace(/<think>[\s\S]*?<\/think>/, '').trim();
     return { thinking, response };
   }
-  // Try "Final Answer" / "Answer" marker (model outputs reasoning then final answer)
-  const answerMatch = content.match(/^([\s\S]+?)(?:#+\s*(?:Final\s+)?Answer\s*\n)([\s\S]+)$/i);
-  if (answerMatch) {
-    return { thinking: answerMatch[1].trim(), response: answerMatch[2].trim() };
+  // Try common answer/output markers
+  const markers = [
+    /^([\s\S]+?)(?:#+\s*(?:Final\s+)?(?:Answer|Output|Response)\s*\n)([\s\S]+)$/i,
+    /^([\s\S]+?)(?:\*\*(?:Final\s+)?(?:Answer|Output|Response)\*\*\s*\n)([\s\S]+)$/i,
+    /^([\s\S]+?)(?:(?:Final\s+)?(?:Answer|Output|Response)\s*:\s*\n)([\s\S]+)$/i,
+  ];
+  for (const re of markers) {
+    const m = content.match(re);
+    if (m) return { thinking: m[1].trim(), response: m[2].trim() };
   }
   return { thinking: null, response: content.trim() };
 }
